@@ -1,0 +1,545 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Soccer — Sub Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f1712;
+    --surface:#16211a;
+    --surface-2:#1d2c22;
+    --line:#293a2d;
+    --pitch:#4fb8e8;
+    --pitch-dim:#16303c;
+    --keeper:#e8c23d;
+    --keeper-dim:#3a331c;
+    --bench:#5a6a5e;
+    --bench-dim:#1d2c22;
+    --text:#eef2ec;
+    --text-dim:#8fa294;
+    --next:#2bd9a0;
+    --next-dim:#123d30;
+    --danger:#d85a4a;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    min-height:100vh;
+    padding-bottom:2rem;
+  }
+  .wrap{max-width:520px;margin:0 auto;padding:1rem 1rem 0;}
+  h1,.disp{font-family:'Oswald',sans-serif;font-weight:600;letter-spacing:0.02em;}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:1rem 0 0.5rem;}
+  .topbar h1{font-size:20px;margin:0;color:var(--pitch);text-transform:uppercase;}
+  .pill{font-size:11px;color:var(--text-dim);border:1px solid var(--line);padding:3px 9px;border-radius:99px;}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:1rem;margin-bottom:0.85rem;}
+  .card h2{font-size:13px;margin:0 0 0.7rem;text-transform:uppercase;letter-spacing:0.06em;color:var(--text-dim);font-weight:600;font-family:'Inter',sans-serif;}
+  label{font-size:12px;color:var(--text-dim);display:block;margin-bottom:4px;}
+  input[type=text],input[type=number],select{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    border-radius:8px;padding:9px 10px;font-size:14px;font-family:'Inter',sans-serif;
+  }
+  input:focus,select:focus{outline:2px solid var(--pitch);outline-offset:1px;}
+  .row{display:flex;gap:0.6rem;}
+  .row > *{flex:1;}
+  button{font-family:'Inter',sans-serif;font-weight:600;font-size:14px;border-radius:8px;border:1px solid var(--line);background:var(--surface-2);color:var(--text);padding:10px 14px;cursor:pointer;}
+  button:active{transform:scale(0.98);}
+  .btn-primary{background:var(--pitch);border-color:var(--pitch);color:#0f1712;}
+  .btn-danger{background:transparent;border-color:var(--danger);color:var(--danger);}
+  .btn-ghost{background:transparent;}
+  .btn-full{width:100%;}
+  .player-row{display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--line);}
+  .player-row:last-child{border-bottom:none;}
+  .player-row input[type=text]{flex:1;padding:6px 8px;}
+  .chk{width:20px;height:20px;accent-color:var(--pitch);flex-shrink:0;}
+  .x-btn{background:none;border:none;color:var(--text-dim);font-size:18px;cursor:pointer;padding:0 4px;}
+  .add-row{display:flex;gap:8px;margin-top:8px;}
+  .add-row input{flex:1;}
+  .add-row button{flex-shrink:0;}
+  .empty{color:var(--text-dim);font-size:13px;text-align:center;padding:1rem 0;}
+  .err{color:var(--danger);font-size:12px;margin-top:6px;}
+  /* live view */
+  .clock-wrap{text-align:center;padding:0.5rem 0 0.8rem;}
+  .half-label{font-size:12px;color:var(--text-dim);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;}
+  .clock{font-family:'Oswald',sans-serif;font-size:52px;font-weight:600;line-height:1;color:var(--text);}
+  .clock.over{color:var(--danger);}
+  .clock-controls{display:flex;gap:8px;justify-content:center;margin-top:10px;}
+  .slot{border-radius:10px;padding:10px 12px;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;border:1px solid var(--line);}
+  .slot.keeper{background:var(--keeper-dim);border-color:var(--keeper);}
+  .slot.pitch{background:var(--pitch-dim);border-color:var(--pitch);}
+  .slot .name{font-weight:600;font-size:15px;}
+  .slot .tag{font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:var(--text-dim);}
+  .slot.keeper .tag{color:var(--keeper);}
+  .slot.pitch .tag{color:var(--pitch);}
+  .slot .time{font-family:'Oswald',sans-serif;font-size:15px;color:var(--text-dim);}
+  .bench-row{display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:var(--surface-2);margin-bottom:6px;}
+  .bench-row.next{background:var(--next-dim);border:1px solid var(--next);}
+  .bench-row .name{font-size:14px;font-weight:500;}
+  .bench-row .tag{font-size:10px;color:var(--next);text-transform:uppercase;letter-spacing:0.05em;}
+  .sub-btn{width:100%;margin-top:6px;padding:12px;font-size:15px;}
+  .foot-actions{display:flex;gap:8px;margin-top:0.5rem;}
+  .foot-actions button{flex:1;}
+  .hidden{display:none !important;}
+  .swap-icon{color:var(--text-dim);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <h1>Sub Tracker</h1>
+    <span class="pill" id="statusPill">Setup</span>
+  </div>
+
+  <!-- SETUP SCREEN -->
+  <div id="setupScreen">
+
+    <div class="card">
+      <h2>Roster</h2>
+      <div style="color:var(--text-dim);font-size:12px;margin-bottom:8px;">Set each player's position — we'll always try to keep at least one defender and one attacker on the pitch.</div>
+      <div id="playerList"></div>
+      <div class="add-row">
+        <input type="text" id="newPlayerName" placeholder="Player name" maxlength="20">
+        <button id="addPlayerBtn">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>This week's goalies</h2>
+      <label>1st half in goal, plays 2nd half outfield (full half, no sub)</label>
+      <select id="goalie1Select"></select>
+      <label style="margin-top:10px;">2nd half in goal, plays 1st half outfield (full half, no sub)</label>
+      <select id="goalie2Select"></select>
+      <div class="err hidden" id="goalieErr">Pick two different players who are marked as playing.</div>
+    </div>
+
+    <div class="card">
+      <h2>Timing</h2>
+      <div class="row">
+        <div>
+          <label>Half length</label>
+          <input type="text" value="20 min" disabled style="opacity:0.6;">
+        </div>
+        <div>
+          <label>Sub window</label>
+          <input type="text" id="subWindowDisplay" value="—" disabled style="opacity:0.6;">
+        </div>
+      </div>
+      <div style="color:var(--text-dim);font-size:12px;margin-top:6px;">Worked out automatically from how many players are rotating through the bench.</div>
+    </div>
+
+    <button class="btn-primary btn-full" id="startGameBtn" style="padding:13px;font-size:15px;">Start game</button>
+  </div>
+
+  <!-- LIVE SCREEN -->
+  <div id="liveScreen" class="hidden">
+
+    <div class="clock-wrap">
+      <div class="half-label" id="halfLabel">First half</div>
+      <div class="clock" id="clockDisp">25:00</div>
+      <div class="clock-controls">
+        <button id="playPauseBtn" style="width:90px;">Start</button>
+        <button id="resetClockBtn" class="btn-ghost">Reset</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>On the pitch</h2>
+      <div id="onFieldList"></div>
+    </div>
+
+    <div class="card">
+      <h2>Bench — next up first</h2>
+      <div id="benchList"></div>
+      <button class="sub-btn btn-primary" id="subBtn">Make substitution</button>
+    </div>
+
+    <div class="foot-actions">
+      <button id="halftimeBtn">Halftime — swap goalies</button>
+    </div>
+    <div class="foot-actions">
+      <button class="btn-danger" id="endGameBtn">End game</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+const STORAGE_KEY = 'soccer-roster-settings';
+let players = []; // {id, name, playing}
+const HALF_LENGTH_MIN = 20;
+let goalie1 = null, goalie2 = null; // ids
+
+function computeSubWindowMin(rotatorCount){
+  // 5 rotating spots on field; if 5 or fewer rotators, nobody sits, no window needed
+  if(rotatorCount<=5) return null;
+  const GAME_LENGTH_MIN = HALF_LENGTH_MIN * 2;
+  return Math.max(2, Math.round(GAME_LENGTH_MIN / rotatorCount));
+}
+
+let game = null;
+/* game = {
+  half: 1|2,
+  running: false,
+  elapsedSec: 0,
+  keeperId, anchorId,          // current half
+  onFieldIds: [4 rotating ids],
+  minutesById: {id: seconds},
+  lastTickTs: null
+} */
+let timerHandle = null;
+
+function uid(){ return 'p'+Math.random().toString(36).slice(2,9); }
+
+function fmtClock(sec){
+  const m = Math.floor(sec/60), s = Math.floor(sec%60);
+  return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0');
+}
+function fmtMin(sec){
+  return Math.round(sec/60)+"'";
+}
+function nameOf(id){
+  const p = players.find(p=>p.id===id);
+  return p ? p.name : '—';
+}
+function playerById(id){
+  return players.find(p=>p.id===id) || {position:'E'};
+}
+function isDefender(id){ const pos = playerById(id).position||'E'; return pos==='D'||pos==='E'; }
+function isAttacker(id){ const pos = playerById(id).position||'E'; return pos==='A'||pos==='E'; }
+
+async function loadSettings(){
+  try{
+    const res = await window.storage.get(STORAGE_KEY);
+    if(res && res.value){
+      const d = JSON.parse(res.value);
+      players = d.players || [];
+      goalie1 = d.goalie1 || null;
+      goalie2 = d.goalie2 || null;
+    }
+  }catch(e){ /* no saved data yet */ }
+  renderSetup();
+}
+async function saveSettings(){
+  try{
+    await window.storage.set(STORAGE_KEY, JSON.stringify({players, goalie1, goalie2}));
+  }catch(e){ console.error('save failed', e); }
+}
+
+function renderSetup(){
+  const list = document.getElementById('playerList');
+  if(players.length===0){
+    list.innerHTML = '<div class="empty">Add your squad below.</div>';
+  } else {
+    list.innerHTML = players.map(p=>`
+      <div class="player-row">
+        <input type="checkbox" class="chk" data-id="${p.id}" ${p.playing?'checked':''}>
+        <input type="text" data-id="${p.id}" value="${p.name.replace(/"/g,'&quot;')}" maxlength="20">
+        <select class="pos-select" data-id="${p.id}" style="flex:0 0 92px;padding:6px 4px;font-size:12px;">
+          <option value="E" ${(p.position||'E')==='E'?'selected':''}>Either</option>
+          <option value="D" ${p.position==='D'?'selected':''}>Defender</option>
+          <option value="A" ${p.position==='A'?'selected':''}>Attacker</option>
+        </select>
+        <button class="x-btn" data-id="${p.id}" aria-label="Remove player">&times;</button>
+      </div>
+    `).join('');
+    list.querySelectorAll('.pos-select').forEach(el=>el.addEventListener('change', e=>{
+      players.find(p=>p.id===e.target.dataset.id).position = e.target.value;
+      saveSettings();
+    }));
+    list.querySelectorAll('.chk').forEach(el=>el.addEventListener('change', e=>{
+      players.find(p=>p.id===e.target.dataset.id).playing = e.target.checked;
+      saveSettings(); renderGoalieSelects(); updateSubWindowDisplay();
+    }));
+    list.querySelectorAll('input[type=text]').forEach(el=>el.addEventListener('input', e=>{
+      players.find(p=>p.id===e.target.dataset.id).name = e.target.value;
+      saveSettings(); renderGoalieSelects();
+    }));
+    list.querySelectorAll('.x-btn').forEach(el=>el.addEventListener('click', e=>{
+      const id = e.target.dataset.id;
+      players = players.filter(p=>p.id!==id);
+      if(goalie1===id) goalie1=null;
+      if(goalie2===id) goalie2=null;
+      saveSettings(); renderSetup();
+    }));
+  }
+  renderGoalieSelects();
+  updateSubWindowDisplay();
+}
+
+function updateSubWindowDisplay(){
+  const rotatorCount = players.filter(p=>p.playing).length - (goalie1?1:0) - (goalie2?1:0);
+  const el = document.getElementById('subWindowDisplay');
+  if(rotatorCount<=5){
+    el.value = 'No bench';
+  } else {
+    const w = computeSubWindowMin(rotatorCount);
+    el.value = w + ' min';
+  }
+}
+
+function renderGoalieSelects(){
+  const playing = players.filter(p=>p.playing);
+  const sel1 = document.getElementById('goalie1Select');
+  const sel2 = document.getElementById('goalie2Select');
+  const opts = '<option value="">Select player</option>' + playing.map(p=>`<option value="${p.id}">${p.name}</option>`).join('');
+  sel1.innerHTML = opts;
+  sel2.innerHTML = opts;
+  sel1.value = playing.find(p=>p.id===goalie1) ? goalie1 : '';
+  sel2.value = playing.find(p=>p.id===goalie2) ? goalie2 : '';
+}
+
+document.getElementById('addPlayerBtn').addEventListener('click', addPlayer);
+document.getElementById('newPlayerName').addEventListener('keydown', e=>{ if(e.key==='Enter') addPlayer(); });
+function addPlayer(){
+  const inp = document.getElementById('newPlayerName');
+  const name = inp.value.trim();
+  if(!name) return;
+  players.push({id:uid(), name, playing:true, position:'E'});
+  inp.value='';
+  saveSettings(); renderSetup();
+}
+
+document.getElementById('goalie1Select').addEventListener('change', e=>{ goalie1 = e.target.value || null; saveSettings(); updateSubWindowDisplay(); });
+document.getElementById('goalie2Select').addEventListener('change', e=>{ goalie2 = e.target.value || null; saveSettings(); updateSubWindowDisplay(); });
+
+document.getElementById('startGameBtn').addEventListener('click', startGame);
+
+function startGame(){
+  const err = document.getElementById('goalieErr');
+  const playingIds = players.filter(p=>p.playing).map(p=>p.id);
+  if(!goalie1 || !goalie2 || goalie1===goalie2 || !playingIds.includes(goalie1) || !playingIds.includes(goalie2)){
+    err.classList.remove('hidden');
+    return;
+  }
+  err.classList.add('hidden');
+
+  const minutesById = {};
+  playingIds.forEach(id=> minutesById[id]=0);
+
+  const rotators = playingIds.filter(id=> id!==goalie1 && id!==goalie2);
+  // seed first 5 rotators on field (or fewer if roster is small)
+  const onFieldIds = rotators.slice(0, Math.min(5, rotators.length));
+  const subWindowMin = computeSubWindowMin(rotators.length);
+  const fairShareSec = rotators.length>5
+    ? (5 * HALF_LENGTH_MIN * 2 * 60) / rotators.length
+    : Infinity;
+
+  game = {
+    half: 1,
+    running: false,
+    elapsedSec: 0,
+    keeperId: goalie1,
+    anchorId: goalie2,
+    onFieldIds,
+    minutesById,
+    rotators,
+    subWindowSec: subWindowMin ? subWindowMin*60 : null,
+    lastSubElapsed: 0,
+    fairShareSec
+  };
+
+  document.getElementById('setupScreen').classList.add('hidden');
+  document.getElementById('liveScreen').classList.remove('hidden');
+  document.getElementById('statusPill').textContent = 'Live';
+  renderLive();
+}
+
+function benchIds(){
+  return game.rotators.filter(id=> !game.onFieldIds.includes(id));
+}
+
+function computeSubPlan(){
+  const bench = benchIds().sort((a,b)=> game.minutesById[a]-game.minutesById[b]);
+  const eligibleBench = bench.filter(id=> game.minutesById[id] < game.fairShareSec);
+  if(eligibleBench.length===0) return {comingOffIds:[], comingOnIds:[], eligibleBench};
+
+  const rotatingSorted = [...game.onFieldIds].sort((a,b)=> game.minutesById[b]-game.minutesById[a]);
+  const swapCount = Math.min(eligibleBench.length, rotatingSorted.length);
+
+  let comingOff = rotatingSorted.slice(0, swapCount);
+  let comingOn = eligibleBench.slice(0, swapCount);
+
+  function resultCounts(off, on){
+    const staying = game.onFieldIds.filter(id=> !off.includes(id));
+    const group = [game.anchorId, ...staying, ...on];
+    return {
+      def: group.filter(isDefender).length,
+      att: group.filter(isAttacker).length
+    };
+  }
+
+  function fixMissing(check){
+    const unused = eligibleBench.find(id=> !comingOn.includes(id) && check(id));
+    if(unused){
+      let idx = comingOn.findIndex((onId,i)=> !check(comingOff[i]));
+      if(idx===-1) idx = comingOn.length-1;
+      comingOn[idx] = unused;
+      return;
+    }
+    const idx = comingOff.findIndex(id=> check(id));
+    if(idx>-1){
+      comingOff.splice(idx,1);
+      comingOn.splice(idx,1);
+    }
+  }
+
+  let counts = resultCounts(comingOff, comingOn);
+  if(counts.def===0) fixMissing(isDefender);
+  counts = resultCounts(comingOff, comingOn);
+  if(counts.att===0) fixMissing(isAttacker);
+
+  return {comingOffIds: comingOff, comingOnIds: comingOn, eligibleBench};
+}
+
+function posLabel(id){
+  const pos = playerById(id).position || 'E';
+  return pos==='D' ? 'Def' : pos==='A' ? 'Att' : 'Either';
+}
+
+function renderLive(){
+  document.getElementById('halfLabel').textContent = game.half===1 ? 'First half' : 'Second half';
+  const remaining = Math.max(0, HALF_LENGTH_MIN*60 - game.elapsedSec);
+  const clockEl = document.getElementById('clockDisp');
+  clockEl.textContent = fmtClock(remaining);
+  clockEl.classList.toggle('over', remaining<=0);
+  document.getElementById('playPauseBtn').textContent = game.running ? 'Pause' : (game.elapsedSec>0 ? 'Resume':'Start');
+
+  const subBtn = document.getElementById('subBtn');
+  if(game.subWindowSec){
+    const sinceSub = game.elapsedSec - game.lastSubElapsed;
+    const due = sinceSub >= game.subWindowSec;
+    if(due){
+      subBtn.textContent = 'Make substitution — due now';
+    } else {
+      const left = Math.ceil(game.subWindowSec - sinceSub);
+      subBtn.textContent = `Make substitution (next due in ${fmtClock(left)})`;
+    }
+  } else {
+    subBtn.textContent = 'Make substitution';
+  }
+
+  const bench = benchIds().sort((a,b)=> game.minutesById[a]-game.minutesById[b]);
+  const plan = computeSubPlan();
+  const eligibleBench = plan.eligibleBench;
+  const comingOnIds = plan.comingOnIds;
+  const comingOffIds = plan.comingOffIds;
+
+  const onField = document.getElementById('onFieldList');
+  let html = `
+    <div class="slot keeper">
+      <div><div class="name">${nameOf(game.keeperId)}</div><div class="tag">In goal — full half</div></div>
+      <div class="time">${fmtMin(game.minutesById[game.keeperId])}</div>
+    </div>
+    <div class="slot pitch">
+      <div><div class="name">${nameOf(game.anchorId)}</div><div class="tag">Outfield — full half · ${posLabel(game.anchorId)}</div></div>
+      <div class="time">${fmtMin(game.minutesById[game.anchorId])}</div>
+    </div>`;
+  game.onFieldIds.forEach(id=>{
+    const comingOff = comingOffIds.includes(id);
+    html += `
+    <div class="slot pitch" style="${comingOff?'border-color:var(--danger);':''}">
+      <div><div class="name">${nameOf(id)}</div><div class="tag" style="${comingOff?'color:var(--danger);':''}">${comingOff?'Coming off next':'Outfield · '+posLabel(id)}</div></div>
+      <div class="time">${fmtMin(game.minutesById[id])}</div>
+    </div>`;
+  });
+  onField.innerHTML = html;
+
+  const benchEl = document.getElementById('benchList');
+  if(bench.length===0){
+    benchEl.innerHTML = '<div class="empty">Everyone\'s on the pitch.</div>';
+    subBtn.disabled = true;
+  } else {
+    subBtn.disabled = (comingOnIds.length===0);
+    benchEl.innerHTML = bench.map((id)=>{
+      const hitLimit = game.minutesById[id] >= game.fairShareSec;
+      const isNext = comingOnIds.includes(id);
+      return `
+      <div class="bench-row ${isNext?'next':''}" style="${hitLimit?'opacity:0.55;':''}">
+        <div><div class="name">${nameOf(id)}</div>${isNext?'<div class="tag">Next in</div>':(hitLimit?'<div class="tag" style="color:var(--text-dim);">Hit fair share</div>':'')}</div>
+        <div class="time">${fmtMin(game.minutesById[id])}</div>
+      </div>
+    `;}).join('');
+  }
+  if(bench.length>0 && eligibleBench.length===0){
+    subBtn.textContent = 'Bench has all hit fair share';
+  }
+}
+
+function tick(){
+  if(!game.running) return;
+  const now = Date.now();
+  const delta = (now - game.lastTickTs)/1000;
+  game.lastTickTs = now;
+  game.elapsedSec += delta;
+  // accrue time for everyone currently on field
+  [game.keeperId, game.anchorId, ...game.onFieldIds].forEach(id=>{
+    game.minutesById[id] = (game.minutesById[id]||0) + delta;
+  });
+  renderLive();
+}
+
+document.getElementById('playPauseBtn').addEventListener('click', ()=>{
+  game.running = !game.running;
+  if(game.running){ game.lastTickTs = Date.now(); }
+  renderLive();
+});
+document.getElementById('resetClockBtn').addEventListener('click', ()=>{
+  if(!confirm('Reset this half\'s clock? Playing-time totals stay.')) return;
+  game.running = false;
+  game.elapsedSec = 0;
+  game.lastSubElapsed = 0;
+  renderLive();
+});
+
+document.getElementById('subBtn').addEventListener('click', ()=>{
+  const plan = computeSubPlan();
+  if(plan.comingOnIds.length===0) return;
+  plan.comingOffIds.forEach((offId,i)=>{
+    const idx = game.onFieldIds.indexOf(offId);
+    game.onFieldIds[idx] = plan.comingOnIds[i];
+  });
+  game.lastSubElapsed = game.elapsedSec;
+  renderLive();
+});
+
+document.getElementById('halftimeBtn').addEventListener('click', ()=>{
+  if(!confirm('Start second half? Goalie swaps to outfield, second goalie takes the goal.')) return;
+  game.running = false;
+  game.half = 2;
+  game.elapsedSec = 0;
+  game.lastSubElapsed = 0;
+  const oldKeeper = game.keeperId;
+  const oldAnchor = game.anchorId;
+  game.keeperId = oldAnchor;   // goalie2 now keeps
+  game.anchorId = oldKeeper;   // goalie1 now full-half outfield
+  // reseed on-field rotators fresh for the new half (same rotator pool)
+  game.onFieldIds = game.rotators.slice(0, Math.min(5, game.rotators.length));
+  document.getElementById('halftimeBtn').disabled = true;
+  renderLive();
+});
+
+document.getElementById('endGameBtn').addEventListener('click', ()=>{
+  if(!confirm('End this game? Live tracking will be cleared, roster stays saved.')) return;
+  clearInterval(timerHandle);
+  game = null;
+  document.getElementById('liveScreen').classList.add('hidden');
+  document.getElementById('setupScreen').classList.remove('hidden');
+  document.getElementById('statusPill').textContent = 'Setup';
+  document.getElementById('halftimeBtn').disabled = false;
+  renderSetup();
+});
+
+timerHandle = setInterval(()=>{ if(game) tick(); }, 1000);
+
+loadSettings();
+</script>
+</body>
+</html>
