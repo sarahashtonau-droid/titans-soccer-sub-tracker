@@ -190,10 +190,16 @@
       <button class="sub-btn btn-primary" id="subBtn">Make substitution</button>
     </div>
 
+    <div class="card">
+      <h2>Playing time — all players</h2>
+      <div id="leaderboardList"></div>
+    </div>
+
     <div class="foot-actions">
       <button id="halftimeBtn">Halftime — swap goalies</button>
     </div>
     <div class="foot-actions">
+      <button id="newGameBtn">↺ New game</button>
       <button class="btn-danger" id="endGameBtn">End game</button>
     </div>
   </div>
@@ -222,6 +228,7 @@ function computeSubWindowMin(rotatorCount){
 let game = null;
 let timerHandle = null;
 let audioCtx = null;
+let wakeLock = null;
 
 function uid(){ return 'p'+Math.random().toString(36).slice(2,9); }
 
@@ -570,6 +577,28 @@ function playBuzzer(){
 function doVibrate(){
   try{ if(navigator.vibrate) navigator.vibrate([300,120,300,120,300]); }catch(e){}
 }
+
+async function requestWakeLock(){
+  try{
+    if('wakeLock' in navigator){
+      wakeLock = await navigator.wakeLock.request('screen');
+    }
+  }catch(e){ wakeLock = null; }
+}
+function releaseWakeLock(){
+  try{ if(wakeLock){ wakeLock.release(); wakeLock = null; } }catch(e){}
+}
+document.addEventListener('visibilitychange', ()=>{
+  if(document.visibilityState==='visible'){
+    if(game && game.running){
+      // tick() computes delta from the real last-tick timestamp, so calling it now
+      // credits all the time that passed while the screen was off/backgrounded
+      tick();
+      requestWakeLock();
+    }
+  }
+});
+
 function triggerSubAlert(){
   game.subDue = true;
   playBuzzer();
@@ -653,6 +682,26 @@ function renderLive(){
   if(bench.length>0 && eligibleBench.length===0){
     subBtn.textContent = 'Bench has all hit fair share';
   }
+
+  renderLeaderboard();
+}
+
+function currentRoleTag(id){
+  if(id===game.keeperId) return 'In goal';
+  if(id===game.anchorId) return 'Outfield — full half';
+  if(game.onFieldIds.includes(id)) return 'Outfield — rotating';
+  return 'Bench';
+}
+
+function renderLeaderboard(){
+  const holder = document.getElementById('leaderboardList');
+  const allIds = Object.keys(game.minutesById).sort((a,b)=> game.minutesById[b]-game.minutesById[a]);
+  holder.innerHTML = allIds.map(id=>`
+    <div class="bench-row">
+      <div><div class="name">${nameOf(id)}</div><div class="tag" style="color:var(--text-dim);">${currentRoleTag(id)}</div></div>
+      <div class="time">${fmtMin(game.minutesById[id])}</div>
+    </div>
+  `).join('');
 }
 
 function tick(){
@@ -673,6 +722,7 @@ function tick(){
   if(game.elapsedSec >= halfLenSec){
     game.elapsedSec = halfLenSec;
     game.running = false;
+    releaseWakeLock();
     renderLive();
     return;
   }
@@ -693,12 +743,18 @@ function tick(){
 document.getElementById('playPauseBtn').addEventListener('click', ()=>{
   ensureAudio();
   game.running = !game.running;
-  if(game.running){ game.lastTickTs = Date.now(); }
+  if(game.running){
+    game.lastTickTs = Date.now();
+    requestWakeLock();
+  } else {
+    releaseWakeLock();
+  }
   renderLive();
 });
 document.getElementById('resetClockBtn').addEventListener('click', ()=>{
   if(!confirm('Reset this half\'s clock? Playing-time totals stay.')) return;
   game.running = false;
+  releaseWakeLock();
   game.elapsedSec = 0;
   game.lastSubElapsed = 0;
   game.lastAlertIndex = 0;
@@ -732,6 +788,7 @@ document.getElementById('subBtn').addEventListener('click', ()=>{
 document.getElementById('halftimeBtn').addEventListener('click', ()=>{
   if(!confirm('Start second half? Goalie swaps to outfield, second goalie takes the goal.')) return;
   game.running = false;
+  releaseWakeLock();
   game.half = 2;
   game.elapsedSec = 0;
   game.lastSubElapsed = 0;
@@ -747,9 +804,17 @@ document.getElementById('halftimeBtn').addEventListener('click', ()=>{
   renderLive();
 });
 
+document.getElementById('newGameBtn').addEventListener('click', ()=>{
+  if(!confirm('Start a new game? Clock and everyone\'s minutes reset to zero, same roster and goalies stay.')) return;
+  releaseWakeLock();
+  document.getElementById('halftimeBtn').disabled = false;
+  document.getElementById('playPauseBtn').disabled = false;
+  startGame();
+});
+
 document.getElementById('endGameBtn').addEventListener('click', ()=>{
   if(!confirm('End this game? Live tracking will be cleared, roster stays saved.')) return;
-  clearInterval(timerHandle);
+  releaseWakeLock();
   game = null;
   document.getElementById('liveScreen').classList.add('hidden');
   document.getElementById('setupScreen').classList.remove('hidden');
