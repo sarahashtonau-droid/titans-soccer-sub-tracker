@@ -190,6 +190,8 @@
       <div id="onFieldList"></div>
     </div>
 
+    <div style="color:var(--text-dim);font-size:12px;text-align:center;margin:-0.3rem 0 0.6rem;" id="manualSubHint"></div>
+
     <div class="card">
       <h2>Bench — next up first</h2>
       <div id="benchList"></div>
@@ -218,6 +220,8 @@ let fieldSize = 7; // total players on pitch at once, incl. goalie
 const FAIR_TOLERANCE_MIN = 5; // +/- minutes allowed either side of an equal split before a rotator is capped
 let goalie1 = null, goalie2 = null; // ids
 let shuffledStartingIds = null; // array of rotator ids chosen by 'Shuffle starting lineup', or null for default order
+let selectedBenchId = null;  // manual one-off sub: bench player currently tapped
+let selectedFieldId = null;  // manual one-off sub: on-pitch rotating player currently tapped
 
 function rotatingSlots(){
   return Math.max(0, fieldSize - 2);
@@ -343,6 +347,8 @@ document.getElementById('shuffleLineupBtn').addEventListener('click', ()=>{
   renderLineupPreview();
 });
 
+const DEFAULT_ROSTER_NAMES = ['Samson','Leon','Indy','Sam','Theo','Ethan','Max','Milan','Minty','Sunni'];
+
 async function loadSettings(){
   try{
     const res = await window.storage.get(STORAGE_KEY);
@@ -355,6 +361,10 @@ async function loadSettings(){
       fieldSize = d.fieldSize || 7;
     }
   }catch(e){ /* no saved data yet */ }
+  if(players.length===0){
+    players = DEFAULT_ROSTER_NAMES.map(name=> ({id:uid(), name, playing:true, primary:'D', secondary:'A'}));
+    saveSettings();
+  }
   document.getElementById('halfLengthInput').value = halfLengthMin;
   document.getElementById('fieldSizeInput').value = fieldSize;
   renderSetup();
@@ -637,6 +647,59 @@ function dismissSubAlert(){
   if(game){ game.subDue = false; renderLive(); }
 }
 
+function selectBenchPlayer(id){
+  selectedBenchId = (selectedBenchId===id) ? null : id;
+  maybeConfirmManualSub();
+  renderLive();
+}
+function selectFieldPlayer(id){
+  selectedFieldId = (selectedFieldId===id) ? null : id;
+  maybeConfirmManualSub();
+  renderLive();
+}
+function maybeConfirmManualSub(){
+  if(!selectedBenchId || !selectedFieldId) return;
+  const benchName = nameOf(selectedBenchId);
+  const fieldName = nameOf(selectedFieldId);
+
+  let msg, role;
+  if(selectedFieldId===game.keeperId){
+    role = 'keeper';
+    msg = `Sub ${benchName} on for ${fieldName}? ${benchName} will go in goal for the rest of this half, ${fieldName} moves to the bench. This is a one-off change (e.g. injury).`;
+  } else if(selectedFieldId===game.anchorId){
+    role = 'anchor';
+    msg = `Sub ${benchName} on for ${fieldName}? ${benchName} will play outfield for the rest of this half, ${fieldName} moves to the bench. This is a one-off change (e.g. injury).`;
+  } else {
+    role = 'rotating';
+    msg = `Sub ${benchName} on for ${fieldName}? This is a one-off change (e.g. injury) and won't follow the usual fairness pairing.`;
+  }
+
+  const proceed = confirm(msg);
+  if(proceed){
+    if(role==='keeper'){
+      const oldKeeper = game.keeperId;
+      game.keeperId = selectedBenchId;
+      game.rotators = game.rotators.filter(id=> id!==selectedBenchId);
+      if(!game.rotators.includes(oldKeeper)) game.rotators.push(oldKeeper);
+      if(!(oldKeeper in game.minutesById)) game.minutesById[oldKeeper] = 0;
+    } else if(role==='anchor'){
+      const oldAnchor = game.anchorId;
+      game.anchorId = selectedBenchId;
+      game.rotators = game.rotators.filter(id=> id!==selectedBenchId);
+      if(!game.rotators.includes(oldAnchor)) game.rotators.push(oldAnchor);
+      if(!(oldAnchor in game.minutesById)) game.minutesById[oldAnchor] = 0;
+    } else {
+      const idx = game.onFieldIds.indexOf(selectedFieldId);
+      if(idx>-1) game.onFieldIds[idx] = selectedBenchId;
+    }
+    game.lastSubElapsed = game.elapsedSec;
+    game.lastAlertIndex = 0;
+    game.subDue = false;
+  }
+  selectedBenchId = null;
+  selectedFieldId = null;
+}
+
 function renderLive(){
   document.getElementById('halfLabel').textContent = game.half===1 ? 'First half' : 'Second half';
   const remaining = Math.max(0, halfLengthMin*60 - game.elapsedSec);
@@ -674,19 +737,23 @@ function renderLive(){
   }
 
   const onField = document.getElementById('onFieldList');
+  const keeperSelected = selectedFieldId===game.keeperId;
+  const anchorSelected = selectedFieldId===game.anchorId;
   let html = `
-    <div class="slot keeper">
+    <div class="slot keeper" style="cursor:pointer;${keeperSelected?'box-shadow:0 0 0 2px var(--next);':''}" onclick="selectFieldPlayer('${game.keeperId}')">
       <div><div class="name">${nameOf(game.keeperId)}</div><div class="tag">In goal — full half</div></div>
       <div class="time">${fmtMin(game.minutesById[game.keeperId])}</div>
     </div>
-    <div class="slot pitch">
+    <div class="slot pitch" style="cursor:pointer;${anchorSelected?'box-shadow:0 0 0 2px var(--next);':''}" onclick="selectFieldPlayer('${game.anchorId}')">
       <div><div class="name">${nameOf(game.anchorId)}</div><div class="tag">Outfield — full half · ${posLabel(game.anchorId)}</div></div>
       <div class="time">${fmtMin(game.minutesById[game.anchorId])}</div>
     </div>`;
   game.onFieldIds.forEach(id=>{
     const comingOff = comingOffIds.includes(id);
+    const isSelected = selectedFieldId===id;
+    const borderStyle = isSelected ? 'border-color:var(--next);box-shadow:0 0 0 2px var(--next);' : (comingOff?'border-color:var(--danger);':'');
     html += `
-    <div class="slot pitch" style="${comingOff?'border-color:var(--danger);':''}">
+    <div class="slot pitch" style="${borderStyle}cursor:pointer;" onclick="selectFieldPlayer('${id}')">
       <div><div class="name">${nameOf(id)}</div><div class="tag" style="${comingOff?'color:var(--danger);':''}">Outfield · ${posLabel(id)}</div></div>
       <div class="time">${fmtMin(game.minutesById[id])}</div>
     </div>`;
@@ -702,12 +769,22 @@ function renderLive(){
     benchEl.innerHTML = bench.map((id)=>{
       const hitLimit = game.minutesById[id] >= fairCapSec();
       const isNext = comingOnIds.includes(id);
+      const isSelected = selectedBenchId===id;
+      const selStyle = isSelected ? 'border-color:var(--next);box-shadow:0 0 0 2px var(--next);' : '';
       return `
-      <div class="bench-row ${isNext?'next':''}" style="${hitLimit?'opacity:0.55;':''}">
+      <div class="bench-row ${isNext?'next':''}" style="${hitLimit?'opacity:0.55;':''}${selStyle}cursor:pointer;" onclick="selectBenchPlayer('${id}')">
         <div><div class="name">${nameOf(id)}</div><div class="tag" style="${isNext?'':'color:var(--text-dim);'}">${isNext?'Next in':(hitLimit?'Hit fair share':posLabel(id))}</div></div>
         <div class="time">${fmtMin(game.minutesById[id])}</div>
       </div>
     `;}).join('');
+  }
+  const hintEl = document.getElementById('manualSubHint');
+  if(bench.length===0){
+    hintEl.textContent = '';
+  } else if(selectedBenchId || selectedFieldId){
+    hintEl.textContent = 'Tap a player on the other list to confirm the one-off swap, or tap your selection again to cancel.';
+  } else {
+    hintEl.textContent = 'Tap a bench player, then any pitch player (incl. keeper/anchor), for a one-off swap (e.g. injury).';
   }
   if(!plan.suppressedLate && bench.length>0 && eligibleBench.length===0){
     subBtn.textContent = 'Bench has all hit fair share';
@@ -789,6 +866,8 @@ document.getElementById('resetClockBtn').addEventListener('click', ()=>{
   game.lastSubElapsed = 0;
   game.lastAlertIndex = 0;
   game.subDue = false;
+  selectedBenchId = null;
+  selectedFieldId = null;
   renderLive();
 });
 
@@ -812,6 +891,8 @@ document.getElementById('subBtn').addEventListener('click', ()=>{
   game.lastSubElapsed = game.elapsedSec;
   game.lastAlertIndex = 0;
   game.subDue = false;
+  selectedBenchId = null;
+  selectedFieldId = null;
   renderLive();
 });
 
@@ -824,6 +905,8 @@ document.getElementById('halftimeBtn').addEventListener('click', ()=>{
   game.lastSubElapsed = 0;
   game.lastAlertIndex = 0;
   game.subDue = false;
+  selectedBenchId = null;
+  selectedFieldId = null;
   const oldKeeper = game.keeperId;
   const oldAnchor = game.anchorId;
   game.keeperId = oldAnchor;
@@ -837,6 +920,8 @@ document.getElementById('halftimeBtn').addEventListener('click', ()=>{
 document.getElementById('newGameBtn').addEventListener('click', ()=>{
   if(!confirm('Start a new game? Clock and everyone\'s minutes reset to zero, same roster and goalies stay.')) return;
   releaseWakeLock();
+  selectedBenchId = null;
+  selectedFieldId = null;
   document.getElementById('halftimeBtn').disabled = false;
   document.getElementById('playPauseBtn').disabled = false;
   startGame();
@@ -845,6 +930,8 @@ document.getElementById('newGameBtn').addEventListener('click', ()=>{
 document.getElementById('endGameBtn').addEventListener('click', ()=>{
   if(!confirm('End this game? Live tracking will be cleared, roster stays saved.')) return;
   releaseWakeLock();
+  selectedBenchId = null;
+  selectedFieldId = null;
   game = null;
   document.getElementById('liveScreen').classList.add('hidden');
   document.getElementById('setupScreen').classList.remove('hidden');
